@@ -1,0 +1,10 @@
+llama-index
+qdrant-client
+transformers
+torch
+spacy
+ragas
+fastapi
+uvicorn
+mlflow
+python-dotenv
