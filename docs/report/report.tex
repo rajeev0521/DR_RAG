@@ -1,0 +1,677 @@
+\documentclass[12pt,a4paper]{article}
+
+% ---- Page Layout (Spec: 3.5cm left, 2.5cm top, 1.25cm right, 2.0cm bottom) ----
+\usepackage[a4paper, left=3.5cm, right=1.25cm, top=2.5cm, bottom=2.0cm]{geometry}
+
+% ---- Fonts & Spacing (Spec: Times New Roman, 12pt, 1.5 spacing, justified) ----
+\usepackage{setspace}
+\usepackage{newtxtext, newtxmath}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+
+% ---- Math, Tables, Figures ----
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{caption}
+
+% ---- Hyperlinks & TOC ----
+\usepackage[hidelinks]{hyperref}
+\usepackage{float}
+
+% ---- Caption placement: Figure captions BOTTOM (default), Table captions TOP ----
+\captionsetup[table]{position=above}
+\captionsetup[figure]{position=below}
+
+% ---- Paragraph formatting (justified, no extra indent after sections) ----
+\usepackage{parskip}
+
+% ---- Page style ----
+\pagestyle{plain}
+
+\onehalfspacing
+
+\begin{document}
+
+%================================================================
+%  TITLE PAGE  (BUG-04 fix)
+%================================================================
+\begin{titlepage}
+\centering
+\vspace*{2cm}
+{\LARGE\bfseries Adaptive Semantic-Velocity Chunking\\[6pt]
+with Dynamic-Relevant RAG (DR-RAG)\par}
+\vspace{1.5cm}
+{\large A Major Project Report\\[4pt]
+Submitted in Partial Fulfillment of the Requirements\\[4pt]
+for the Degree of Bachelor of Technology\par}
+\vspace{2cm}
+{\Large\itshape Rajeev Gupta\par}
+\vfill
+{\large Department of Computer Science and Engineering\\[6pt]
+\today\par}
+\end{titlepage}
+
+%================================================================
+%  INDEX / TABLE OF CONTENTS  (Spec §3: Index after title page)
+%================================================================
+\tableofcontents
+\newpage
+
+%================================================================
+%  ABSTRACT  (Spec: should not exceed 1 page)
+%================================================================
+\begin{abstract}
+
+Retrieval-Augmented Generation (RAG) systems face fundamental limitations when processing
+long, structured documents such as legal contracts and academic papers. Standard fixed-size
+chunking disrupts semantic coherence, while single-stage retrieval fails to support
+multi-hop reasoning across weakly linked evidence.
+
+This work proposes \textbf{Adaptive Semantic-Velocity Chunking with Dynamic-Relevant RAG
+(DR-RAG)}, a two-phase framework that addresses both challenges. Phase~I introduces
+\textbf{Context-Augmented Agentic Chunking (CAAC)}, which replaces static chunking with
+Small Language Model (SLM)-guided semantic boundaries. Each chunk is enriched with a
+rolling summary of preceding context, ensuring preservation of both local meaning and
+global document flow. Semantic velocity, defined as embedding drift between consecutive
+chunks, dynamically adjusts chunk size and summary length.
+
+Phase~II introduces a \textbf{classifier-routed two-stage retrieval mechanism}. The first
+stage retrieves anchor documents using cosine similarity. For complex queries, a second
+stage generates expanded queries from intermediate facts to retrieve additional supporting
+evidence. The final response is generated using the union of anchor and evidence sets.
+
+The proposed framework is designed to improve recall, contextual coherence, multi-hop
+reasoning accuracy, and hallucination resistance compared to conventional RAG systems.
+Experimental evaluation is planned using HotpotQA~\cite{yang2018hotpotqa} and
+CUAD~\cite{hendrycks2021cuad} benchmarks.
+
+\end{abstract}
+
+\newpage
+
+%================================================================
+%  MOTIVATION  (Spec: should not exceed 1 page)
+%================================================================
+\section{Motivation}
+
+Retrieval-Augmented Generation (RAG) has emerged as the dominant paradigm for
+grounding large language model (LLM) responses in external, verifiable knowledge.
+By retrieving relevant document passages at inference time, RAG systems reduce
+hallucination and extend the effective knowledge horizon of LLMs beyond their
+training cut-off. Despite this promise, current RAG pipelines exhibit critical
+structural weaknesses when applied to long, domain-specific documents such as
+legal contracts, academic research papers, and technical standards. Three
+fundamental limitations motivate the design of the proposed DR-RAG framework.
+
+\begin{description}
+\item[Limitation 1: Semantic Fragmentation due to Fixed-Size Chunking.]
+The overwhelming majority of deployed RAG systems partition source documents
+into fixed-size token windows of 256--512 tokens with optional overlap.
+This strategy is computationally convenient but semantically blind. In legal
+documents, a single obligation clause may span several hundred words across
+multiple sentences; splitting it at a token boundary severs the conditional
+relationship between its premise and its consequence. Similarly, in academic
+papers, a mathematical proposition and its proof are logically inseparable,
+yet fixed-size chunking routinely places them in different chunks. The
+retriever then returns a fragment that contains only part of the relevant
+reasoning, causing the generator to produce incomplete or factually incorrect
+answers. Overlap-based mitigation inflates the vector index size without
+resolving the underlying boundary problem.
+
+\item[Limitation 2: Context Decay in Long Documents.]
+Even when individual chunks are semantically coherent, they are stored and
+retrieved in isolation. Definitions, assumptions, and conditions established
+in the introduction or background sections of a document are invisible to a
+chunk retrieved from a later section. This \emph{context decay} is especially
+damaging in legal and scientific texts, where a clause in section~8 may be
+legally conditioned on a definition given in section~2, or where an
+experimental result in section~4 is only interpretable in light of the
+methodology described in section~3. No existing chunking framework provides
+a mechanism to carry forward this accumulated contextual state into each
+retrieved unit.
+
+\item[Limitation 3: Failure of Single-Stage Retrieval for Multi-Hop Reasoning.]
+Many practical queries over structured documents require multi-hop reasoning:
+the answer cannot be found in any single passage but must be assembled from
+evidence distributed across two or more weakly linked sections. Single-stage
+dense retrieval, which ranks passages by cosine similarity to the original
+query, retrieves only the most superficially similar chunk and misses the
+bridging evidence required to complete the reasoning chain. While iterative
+and graph-based approaches such as GraphRAG and multi-agent retrieval systems
+partially address this, they do so at the cost of constructing and maintaining
+expensive knowledge graphs or issuing multiple sequential LLM calls, making
+them impractical for latency-sensitive production environments.
+\end{description}
+
+\newpage
+%================================================================
+%  LITERATURE REVIEW
+%================================================================
+\section{Literature Review}
+
+The design of an effective RAG system depends critically on two components:
+how documents are segmented into retrievable units (chunking), and how
+relevant units are identified at query time (retrieval). This review surveys
+the key chunking strategies proposed in the literature, examines existing
+retrieval architectures, and identifies the gaps that motivate the proposed
+DR-RAG framework.
+
+%----------------------------------------------------------------
+\subsection{Chunking Strategies in RAG Systems}
+%----------------------------------------------------------------
+
+Chunking is the process of partitioning a source document into a collection
+of retrievable units. The granularity, coherence, and contextual completeness
+of these units directly determine the upper bound on retrieval quality.
+Table~\ref{tab:lit_review} summarises the principal chunking methods, their
+mechanisms, and their trade-offs.
+
+% Spec §6: Table caption at TOP
+\begin{table}[!htbp]
+\centering
+\caption{Comparison of Existing Chunking Methods for RAG Systems}
+\label{tab:lit_review}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} p{2.8cm} p{4.5cm} p{3.0cm} p{3.0cm}}
+\toprule
+\textbf{Method} & \textbf{Description} & \textbf{Pros} & \textbf{Cons} \\
+\midrule
+Fixed-Size
+  & Splits document into windows of $n$ tokens with optional overlap
+  & Simple; fast; predictable index size
+  & Breaks semantic structure; mid-sentence splits common \\[2pt]
+
+Sentence-Based
+  & Uses punctuation or NLP sentence detectors to set boundaries
+  & Improves local coherence over fixed-size
+  & Ignores paragraph and section hierarchy \\[2pt]
+
+Recursive
+  & Applies a hierarchy of delimiters (paragraph, sentence, word)
+  & Flexible granularity; structure-aware
+  & Boundaries remain arbitrary; no semantic validation \\[2pt]
+
+Semantic
+  & Computes embedding similarity between adjacent segments; splits on high drift
+  & Produces semantically coherent chunks
+  & Computationally expensive; sensitive to embedding quality \\[2pt]
+
+Proposition-Based
+  & Decomposes text into atomic, self-contained factual propositions
+  & High retrieval precision; minimal noise per chunk
+  & Very slow; requires strong generative model; costly at scale \\[2pt]
+
+Page-Level
+  & Treats each document page as a single chunk
+  & Preserves physical layout and visual structure
+  & Chunks too large; poor retrieval precision; cross-page context lost \\[2pt]
+
+Hierarchical (RAPTOR)
+  & Builds a tree of progressively summarised clusters via recursive abstraction
+  & Supports multi-granularity retrieval
+  & Complex indexing pipeline; high memory overhead; slow to build \\
+
+\bottomrule
+\end{tabular*}
+\end{table}
+
+\subsubsection{Fixed-Size and Sentence-Based Chunking}
+
+Fixed-size chunking~\cite{lewis2020rag} is the most widely adopted approach
+due to its simplicity and deterministic behaviour. A sliding window of a
+fixed number of tokens (typically 256--512) is moved across the document,
+and each window becomes one chunk. While fast and easy to implement, this
+method is agnostic to sentence, clause, and paragraph boundaries. Legal
+clauses or theorem proofs that span more than one window are split mid-way,
+causing retrieval to return semantically incomplete chunks. Overlapping
+windows partially mitigate this but inflate index size and introduce
+redundancy.
+
+Sentence-based chunking improves local coherence by using NLP tools (e.g.,
+spaCy, NLTK punkt tokenizer) to detect sentence boundaries. However, it
+treats each sentence in isolation and ignores the structural hierarchy of the
+document. A legal sub-clause spread across three sentences may be split
+across two chunks, losing the conditional relationship between them.
+
+\subsubsection{Recursive and Semantic Chunking}
+
+Recursive chunking applies a priority-ordered list of delimiters
+(e.g., \texttt{\textbackslash n\textbackslash n}, \texttt{\textbackslash n},
+full stops) and recursively splits segments that exceed a maximum token
+limit. While more structure-aware than fixed-size methods, the boundaries
+produced are still syntactic rather than semantic, and the recursion depth
+is a manually tuned hyperparameter.
+
+Semantic chunking~\cite{gao2024survey} represents a significant improvement.
+It embeds each sentence and computes the cosine similarity between adjacent
+segments. A chunk boundary is inserted wherever the similarity drops below
+a predefined threshold, indicating a topic shift. This approach produces
+topically coherent chunks but requires an embedding model pass over the
+entire document at ingestion time, making it expensive for large corpora.
+It also lacks any mechanism to carry forward contextual information from
+earlier chunks.
+
+\subsubsection{Proposition-Based Chunking}
+
+Proposition-based chunking~\cite{chen2023dense} decomposes text into atomic,
+self-contained factual statements. Each proposition is a minimal claim that
+can be assessed independently. This maximises retrieval precision since each
+chunk is informationally pure. However, the extraction requires a capable
+instruction-following language model, making this method approximately
+10--20$\times$ slower than fixed-size chunking. It is impractical for
+real-time or large-scale indexing pipelines.
+
+\subsubsection{Page-Level and Hierarchical (RAPTOR) Chunking}
+
+Page-level chunking is used in document-image pipelines where the physical
+layout carries meaning (e.g., scanned PDFs). Each page is treated as a
+single chunk. While this preserves visual structure, pages are too coarse
+as retrieval units and frequently span multiple unrelated topics.
+
+RAPTOR~\cite{sarthi2024raptor} constructs a tree of summaries by recursively
+clustering and summarising document segments bottom-up. At query time,
+retrieval can occur at multiple levels of the tree, enabling both fine-grained
+and abstract matching. Despite its theoretical elegance, RAPTOR requires
+building and maintaining a complex tree index, incurs high memory overhead,
+and its summarisation quality degrades for highly technical documents such
+as legal contracts.
+
+%----------------------------------------------------------------
+\subsection{Retrieval Architectures}
+%----------------------------------------------------------------
+
+\subsubsection{Single-Stage Dense Retrieval}
+
+Dense Passage Retrieval (DPR)~\cite{karpukhin2020dpr} introduced bi-encoder
+models that independently encode queries and passages into a shared embedding
+space, enabling efficient maximum inner-product search (MIPS). DPR achieves
+strong performance on factoid open-domain QA benchmarks but is limited to
+single-hop questions where the answer is contained within a single passage.
+For multi-hop questions requiring evidence from multiple documents, its
+recall degrades substantially.
+
+\subsubsection{Multi-Stage and Iterative Retrieval}
+
+To address multi-hop reasoning, several iterative retrieval approaches have
+been proposed. REPLUG~\cite{yu2023replug} treats the retrieval corpus as a
+plug-in module for black-box LLMs and uses ensemble scoring over multiple
+retrieved documents. Atlas~\cite{izacard2022atlas} jointly fine-tunes a
+retriever and a reader using few-shot supervision, achieving strong results
+on knowledge-intensive tasks. However, both methods require repeated forward
+passes through large models and scale poorly with corpus size.
+
+\subsubsection{Graph-Based Retrieval}
+
+GraphRAG~\cite{edge2024graphrag} constructs a knowledge graph from the
+document corpus and traverses entity-relation edges to answer complex
+queries. While it excels at reasoning over interconnected entities, graph
+construction is expensive and requires structured entity extraction pipelines.
+The latency of graph traversal also makes it unsuitable for real-time
+applications.
+
+%----------------------------------------------------------------
+\subsection{Research Gaps}
+%----------------------------------------------------------------
+
+A systematic analysis of the above literature reveals four critical gaps
+that existing methods fail to address simultaneously:
+
+\begin{description}
+\item[1. Absence of Document-Type-Aware Chunking.]
+All surveyed chunking methods treat documents uniformly, applying the same
+splitting strategy regardless of whether the input is a legal contract, a
+scientific paper, or a news article. Legal documents are structured around
+hierarchical clause trees, while academic papers follow IMRaD conventions.
+A chunking strategy that is agnostic to these structural patterns will
+systematically fragment semantically complete units.
+
+\item[2. Context Decay in Long Documents.]
+Fixed-size, sentence-based, and even semantic chunking methods discard all
+preceding content when constructing each chunk. In long documents, this
+leads to \emph{context decay}: later chunks lose access to definitions,
+assumptions, or conditions established in earlier sections. No existing
+chunking framework incorporates a rolling contextual memory mechanism to
+counteract this decay.
+
+\item[3. Expensive Multi-Hop Retrieval.]
+Methods capable of multi-hop reasoning (RAPTOR, GraphRAG, iterative
+retrieval) impose high computational and latency costs. GraphRAG requires
+full graph construction before any query can be answered. Iterative
+retrievers require multiple sequential LLM calls. These costs are
+prohibitive for production deployments requiring sub-second response times.
+
+\item[4. Absence of Formal Chunking Quality Metrics.]
+The chunking literature lacks a formal, quantitative metric for evaluating
+whether a proposed boundary is semantically appropriate. Existing methods
+rely on downstream task performance (e.g., QA accuracy) as a proxy, making
+it difficult to diagnose chunking failures independently of retrieval and
+generation. A dedicated metric such as \emph{semantic velocity} --- measuring
+embedding drift at chunk boundaries --- would enable principled, task-agnostic
+evaluation of chunking quality.
+\end{description}
+
+The proposed DR-RAG framework directly targets all four gaps through
+(i)~SLM-guided, structure-aware boundary detection; (ii)~rolling summary
+augmentation for context preservation; (iii)~a lightweight classifier-routed
+two-stage retrieval pipeline; and (iv)~semantic velocity as a formal chunking
+quality metric. The relationship between each gap and its corresponding
+system component is summarised in Table~\ref{tab:gap_mapping}.
+
+% Spec §6: Table caption at TOP
+\begin{table}[!htbp]
+\centering
+\caption{Mapping of Research Gaps to Proposed System Components}
+\label{tab:gap_mapping}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} p{0.6cm} p{4.8cm} p{7.0cm}}
+\toprule
+\textbf{\#} & \textbf{Research Gap} & \textbf{DR-RAG Component} \\
+\midrule
+G1 & No document-type-aware chunking
+   & SLM-guided boundary detector with structure prompts (CAAC \S1.2) \\
+G2 & Context decay in long documents
+   & Rolling summary augmentation with velocity-regulated budget (CAAC \S1.4) \\
+G3 & Expensive multi-hop retrieval
+   & Classifier-routed two-stage retrieval; no graph required (DR-RAG \S2.2--2.4) \\
+G4 & No formal chunking quality metric
+   & Semantic velocity: embedding drift between adjacent chunks (CAAC \S1.3) \\
+\bottomrule
+\end{tabular*}
+\end{table}
+
+\newpage
+%================================================================
+%  METHODOLOGY
+%================================================================
+\section{Methodology}
+
+\subsection{Objective}
+
+The primary objective of this work is to design an efficient and scalable
+Retrieval-Augmented Generation (RAG) framework that addresses two fundamental
+limitations of existing systems:
+    (i)~preservation of semantic document structure through adaptive, context-aware
+chunking, and
+    (ii)~accurate multi-hop reasoning via a lightweight classifier-routed two-stage
+retrieval mechanism.
+
+The overall system is referred to as \textbf{DR-RAG} (Dynamic-Relevant RAG) and
+consists of two sequential phases: Phase~I handles document ingestion and
+chunk construction, while Phase~II handles query processing and response
+generation. The end-to-end pipeline takes an input document corpus and a
+user query and produces a generated response.
+
+% \begin{figure}[!htbp]
+%     \centering
+%     \IfFileExists{high level architecture digram.png}{%
+%         \includegraphics[width=\linewidth]{high level architecture digram.png}%
+%     }{%
+%         \fbox{\parbox{0.9\linewidth}{\centering\vspace{2cm}
+%         \textit{[Architecture diagram placeholder --- insert high level architecture digram.png here]}
+%         \vspace{2cm}}}%
+%     }
+%     \caption{System Architecture of DR-RAG}
+%     \label{fig:architecture}
+% \end{figure}
+
+
+%-------- Phase I --------%
+\subsection{Phase I: Context-Augmented Agentic Chunking (CAAC)}
+
+\subsubsection{Overview}
+
+Standard chunking methods partition a document into fixed-size token windows
+without regard for semantic or structural boundaries, causing context
+fragmentation in long structured documents such as legal contracts and research
+papers. Phase~I addresses this by introducing \textbf{Context-Augmented Agentic
+Chunking (CAAC)}: a semantics-driven strategy guided by a Small Language
+Model~(SLM) and regulated by a novel metric called \emph{semantic velocity}.
+
+\begin{figure}[!htbp]
+    \centering
+    \IfFileExists{Phase 1 architecture diagram.png}{%
+        \includegraphics[width=\linewidth]{Phase 1 architecture diagram.png}%
+    }{%
+        \fbox{\parbox{0.9\linewidth}{\centering\vspace{2cm}
+        \textit{[Architecture diagram placeholder --- insert Phase 1 architecture diagram.png here]}
+        \vspace{2cm}}}%
+    }
+    \caption{Phase I: Context-Augmented Agentic Chunking (CAAC) Architecture}
+    \label{fig:phase1_architecture}
+\end{figure}
+
+\subsubsection{Two-Pass Document Segmentation}
+
+To resolve the circular dependency between chunk boundaries and semantic
+velocity (which requires chunk embeddings that in turn depend on chunk
+boundaries), DR-RAG employs a \textbf{two-pass hierarchical segmentation
+process}.
+
+\paragraph{Pass~1: Preliminary Sentence Embedding.}
+The document is first segmented into individual sentences. Each sentence is
+embedded independently using the embedding model, and the distance between
+adjacent sentence embeddings is computed. These sentence-level drift values
+are used to generate preliminary chunk boundaries via the SLM boundary
+detector.
+
+\paragraph{Pass~2: Adaptive Chunk Refinement.}
+The preliminary chunks are then merged or split dynamically based on their
+semantic drift values:
+\begin{itemize}
+  \item If drift is \textbf{low} (below a lower threshold), adjacent chunks
+    are \textbf{merged} since they cover the same topic.
+  \item If drift is \textbf{moderate} (between thresholds), the chunk
+    boundary is \textbf{retained} as-is.
+  \item If drift is \textbf{high} (above an upper threshold), the chunk is
+    further \textbf{split} to isolate the topic change.
+\end{itemize}
+This two-pass design eliminates the circular dependency because sentence-level
+embeddings are computed \emph{before} adaptive chunk boundaries are formed.
+Each final chunk corresponds to a logically complete unit of information
+(e.g., a legal clause, a theorem, or a methodology paragraph).
+
+\subsubsection{Boundary Detector Training Data}
+
+The SLM boundary detector is fine-tuned using a semi-supervised dataset
+constructed from:
+\begin{itemize}
+  \item legal contracts (CUAD~\cite{hendrycks2021cuad}),
+  \item academic papers (arXiv / PubMed),
+  \item manually annotated semantic transitions.
+\end{itemize}
+Weak supervision labels~\cite{ratner2017snorkel} are generated using heading
+transitions, paragraph topic shifts, and citation density changes. Human
+verification is applied to a sampled subset to ensure label quality.
+
+\subsubsection{Semantic Velocity}
+
+\emph{Semantic velocity} quantifies the magnitude of meaning shift between
+two consecutive chunks. It is computed as the Euclidean distance between the
+embedding vectors of adjacent chunks --- a higher value indicates a larger
+topic shift. Semantic velocity drives two dynamic control functions:
+
+\begin{enumerate}
+  \item \textbf{Adaptive chunk sizing:} Low semantic velocity causes adjacent
+    segments to be merged into a larger coherent chunk; high velocity enforces
+    an immediate hard boundary.
+  \item \textbf{Summary length regulation:} Higher semantic velocity triggers
+    a longer rolling summary to bridge the contextual gap introduced by the
+    topic shift.
+\end{enumerate}
+
+\subsubsection{Context-Augmented Chunk Construction}
+
+Each raw chunk is augmented with a rolling summary generated from the
+\textbf{previous three chunks}. A window size of three was selected because
+a single preceding chunk provides insufficient long-range context, while
+more than five introduces excessive redundancy and token overhead; empirical
+pilot observations confirmed that three provides a practical balance between
+coherence and efficiency. The rolling summary is prepended (concatenated) to
+the original chunk content, producing the final \emph{augmented chunk}.
+
+\subsubsection{Token Budget Scaling}
+
+The rolling-summary token budget scales linearly with semantic velocity.
+The budget ranges from a minimum of 32~tokens (for low drift) to a maximum
+of 128~tokens (for high drift). This means smooth topic continuity receives
+short summaries, while large topic shifts receive longer summaries to bridge
+the contextual gap.
+
+\subsubsection{Context Retention Score}
+
+To evaluate whether a chunk remains semantically understandable in isolation,
+we define the \textbf{Context Retention Score (CRS)}. CRS is calculated as
+the ratio of the cosine similarity between the chunk and its original
+surrounding document context~\cite{reimers2019sentencebert} to the chunk's
+token length. A higher CRS indicates that the chunk preserves more of its
+original meaning without depending on external context.
+
+\subsubsection{Embedding and Indexing}
+
+Each augmented chunk is encoded into a dense vector using the
+BGE-M3~\cite{chen2024bge} bi-encoder embedding model. All vectors are
+stored in a vector database (FAISS~\cite{johnson2019faiss} /
+Qdrant~\cite{qdrant2023}) and indexed with Hierarchical Navigable Small
+World~(HNSW) graphs~\cite{malkov2020hnsw} for efficient approximate
+nearest-neighbour search at query time.
+
+
+%-------- Phase II --------%
+\subsection{Phase II: Dynamic-Relevant RAG (DR-RAG)}
+
+\subsubsection{Overview}
+
+Phase~II defines the query-time pipeline. A lightweight classifier first
+determines the structural complexity of the incoming query. Simple factoid
+queries are answered with single-stage anchor retrieval. Complex multi-hop
+queries additionally trigger an evidence-mining stage, where intermediate
+facts extracted from anchor chunks are used to formulate a secondary query.
+The final answer is generated conditioned on the union of both retrieval sets.
+
+\begin{figure}[!htbp]
+    \centering
+    \IfFileExists{phase 2 architecture diagram.png}{%
+        \includegraphics[width=\linewidth]{phase 2 architecture diagram.png}%
+    }{%
+        \fbox{\parbox{0.9\linewidth}{\centering\vspace{2cm}
+        \textit{[Architecture diagram placeholder --- insert phase 2 architecture diagram.png here]}
+        \vspace{2cm}}}%
+    }
+    \caption{Phase II: Dynamic-Relevant RAG (DR-RAG) Architecture}
+    \label{fig:phase2_architecture}
+\end{figure}
+
+\subsubsection{Step 1 --- Query Encoding and Routing}
+
+The incoming natural language query is encoded into a dense vector and
+passed to a \textbf{query routing classifier}. The classifier is implemented
+as a lightweight transformer-based binary classifier fine-tuned on labeled
+query-complexity data. It uses the following features:
+\begin{itemize}
+  \item the query's embedding vector,
+  \item dependency-tree depth (syntactic complexity),
+  \item conjunction frequency,
+  \item semantic entropy score.
+\end{itemize}
+Based on these features, the classifier routes each query as either
+\textbf{single-hop} (answerable from one passage) or \textbf{multi-hop}
+(requires evidence from multiple passages).
+
+\paragraph{Training Data.}
+The classifier is trained using HotpotQA~\cite{yang2018hotpotqa} multi-hop
+labels, Natural Questions~\cite{kwiatkowski2019nq} single-hop queries, and
+manually labeled legal QA pairs from CUAD~\cite{hendrycks2021cuad}.
+
+\paragraph{Confidence Fallback.}
+If the classifier confidence falls in the ambiguous range (between 45\% and
+55\%), the system defaults to two-stage retrieval to maximise recall.
+
+\subsubsection{Step 2 --- Anchor Retrieval}
+
+For all query types, the top-\textit{k} most semantically similar chunks are
+retrieved from the vector index using cosine similarity, forming the
+\emph{anchor set}. For single-hop queries, the anchor set serves directly as
+the final context. For multi-hop queries, it provides the seed for evidence
+mining.
+
+\subsubsection{Step 3 --- Evidence Mining (Multi-Hop Only)}
+
+\paragraph{(a) Intermediate Fact Extraction.}
+The fact extraction step uses \textbf{SLM-guided structured extraction}.
+Each anchor chunk is transformed into atomic propositions using prompt-based
+information extraction. The extraction process combines dependency parsing,
+Open Information Extraction~(OpenIE)~\cite{stanovsky2018openie}, and SLM
+prompt refinement. For example, given the chunk \textit{``Clause~8 applies
+only when prior written consent is obtained,''} the extracted proposition
+would be the triple: (Clause~8, requires, WrittenConsent). This hybrid
+design reduces hallucinated facts while preserving semantic relationships.
+
+\paragraph{(b) Mining Query Synthesis.}
+The extracted facts are combined with the original query to synthesise an
+expanded secondary query that targets the missing evidence.
+
+\paragraph{(c) Evidence Retrieval.}
+The expanded query is encoded and used to retrieve additional evidence chunks
+from the vector index, forming the \emph{evidence set}. Retrieved chunks
+that overlap with the anchor set are excluded to ensure complementary
+coverage.
+
+\subsubsection{Context Assembly and Response Generation}
+
+Anchor and evidence chunks are deduplicated using cosine similarity with a
+threshold of 0.95: if two chunks have a similarity score at or above this
+value, they are considered duplicates and the one with the higher retrieval
+relevance score is retained.
+
+The language model then generates the final response autoregressively,
+conditioned on the query and the assembled context. The prompt passed to
+the generation model follows the structure: \textit{[System Instruction]
++ [Assembled Context] + [Query]}.
+
+%-------- Ablation Study --------%
+\subsection{Ablation Study}
+
+To isolate the contribution of each DR-RAG component, four ablation
+configurations will be evaluated:
+
+\begin{table}[!htbp]
+\centering
+\caption{Ablation Study Configurations}
+\label{tab:ablation}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} c p{10cm}}
+\toprule
+\textbf{Config} & \textbf{Removed Component} \\
+\midrule
+A1 & No rolling summaries \\
+A2 & Fixed-size chunking instead of CAAC \\
+A3 & No query routing (all queries use two-stage) \\
+A4 & No evidence mining stage \\
+\bottomrule
+\end{tabular*}
+\end{table}
+
+Metrics compared across all configurations:
+\begin{itemize}
+  \item Recall@$K$
+  \item Exact Match (EM)
+  \item Hallucination Rate
+  \item Latency
+  \item Context Retention Score (CRS)
+\end{itemize}
+
+This ablation determines which architectural component contributes most
+significantly to performance.
+
+\newpage
+
+%================================================================
+%  BIBLIOGRAPHY / REFERENCES  (Spec §7: IEEE format)
+%================================================================
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}
