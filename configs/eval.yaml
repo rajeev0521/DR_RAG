@@ -6,7 +6,9 @@ splits:
 
 metrics:
   retrieval_k: [1, 5, 10]
-  compute_ragas: false  # enable when OpenAI API / judge LLM is configured
+  compute_ragas: false  # Set true when LLM judge (OpenAI or Ollama) is enabled; otherwise records explicit null sentinels
+  judge_model: "phi3:mini"
+  ragas_sample_size: 10
 
 bootstrap:
   num_resamples: 10000

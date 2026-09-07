@@ -23,7 +23,7 @@ from ..ingestion.structure_units import extract_structure_aware_units
 from ..profile.embed import EmbeddingModelWrapper
 from ..profile.stp import compute_stp, fit_normalization_stats
 from ..profile.structural_features import compute_structural_score
-from ..retrieval.query_router import QueryRouter
+from ..eval.ragas_eval import evaluate_ragas
 from ..retrieval.stage1_dense import DenseRetriever
 from ..tracking.mlflow_utils import MLflowTracker
 
@@ -94,6 +94,7 @@ def run_ablation_arm(
     data_path: Optional[str] = None,
     config_path: str = "configs/stp_params.yaml",
     retrieval_config_path: str = "configs/retrieval.yaml",
+    eval_config_path: str = "configs/eval.yaml",
     results_dir: str = "results/",
     use_in_memory_store: bool = True,
 ) -> ArmResult:
@@ -101,8 +102,21 @@ def run_ablation_arm(
     Executes a single ablation arm run across a dataset split with seed control.
     """
     np.random.seed(seed)
+    # Assert configuration checksum integrity if frozen checksum exists (Task 6)
+    cfg_file = Path(config_path)
+    sha_file = cfg_file.with_suffix(".sha256")
+    if sha_file.exists():
+        expected_sha = sha_file.read_text(encoding="utf-8").strip()
+        actual_sha = compute_file_sha256(cfg_file)
+        if actual_sha != expected_sha:
+            raise ValueError(
+                f"STP config checksum mismatch for {config_path}! "
+                f"Expected {expected_sha}, got {actual_sha}. Config has been modified since freeze."
+            )
+
     params_cfg = load_yaml_config(config_path)
     retrieval_cfg = load_yaml_config(retrieval_config_path)
+    eval_cfg = load_yaml_config(eval_config_path) if Path(eval_config_path).exists() else {}
 
     # 1. Load Data
     split_file = data_path or f"data/splits/{split}.json"
@@ -183,9 +197,8 @@ def run_ablation_arm(
     )
     build_time = store.index_chunks(all_chunks)
 
-    # 4. Retrieval & Query Routing
+    # 4. Dense Retrieval and Generation
     retriever = DenseRetriever(vector_store=store, embedder=embedder)
-    router = QueryRouter()
     generator = AnswerGenerator(
         model_name=retrieval_cfg.get("generation", {}).get("model_name", "phi3:mini"),
         ollama_url=retrieval_cfg.get("generation", {}).get("ollama_url", "http://localhost:11434/api/generate"),
@@ -249,6 +262,31 @@ def run_ablation_arm(
     em, f1 = compute_qa_metrics(predicted_answers, gold_answers)
     eff = compute_efficiency_metrics(chunks_per_doc, build_time, query_latencies)
 
+    # Compute RAGAS metrics if enabled (or populate explicit null sentinels)
+    ragas_scores = {
+        "ragas_faithfulness": None,
+        "ragas_answer_relevancy": None,
+        "ragas_context_precision": None,
+        "ragas_context_recall": None,
+    }
+    eval_metrics_cfg = eval_cfg.get("metrics", {})
+    if eval_metrics_cfg.get("compute_ragas", False) and queries:
+        query_contexts = []
+        for q_idx in range(len(queries)):
+            top_cids = retrieved_chunk_ids[q_idx][:3]
+            query_contexts.append([chunk_map[cid].augmented_text for cid in top_cids if cid in chunk_map])
+
+        ragas_limit = eval_metrics_cfg.get("ragas_sample_size", 10)
+        ragas_scores = evaluate_ragas(
+            questions=queries[:ragas_limit],
+            contexts=query_contexts[:ragas_limit],
+            answers=predicted_answers[:ragas_limit],
+            ground_truths=gold_answers[:ragas_limit],
+            judge_model=eval_metrics_cfg.get("judge_model", "phi3:mini"),
+            embedding_model=embed_model_name,
+            ollama_url=retrieval_cfg.get("generation", {}).get("ollama_url", "http://localhost:11434/api/generate").replace("/api/generate", ""),
+        )
+
     arm_result = ArmResult(
         system=variant,
         seed=seed,
@@ -263,14 +301,19 @@ def run_ablation_arm(
         tokens_per_chunk=float(eff["tokens_per_chunk"]),
         build_time_sec=float(eff["build_time_sec"]),
         retrieval_latency_ms=float(eff["retrieval_latency_ms"]),
+        ragas_faithfulness=ragas_scores.get("ragas_faithfulness"),
+        ragas_answer_relevancy=ragas_scores.get("ragas_answer_relevancy"),
+        ragas_context_precision=ragas_scores.get("ragas_context_precision"),
+        ragas_context_recall=ragas_scores.get("ragas_context_recall"),
         embedding_model_version=embed_model_name,
         corpus_version="1.0",
     )
 
-    # 7. Persist JSON and Log Tracking
-    write(arm_result, results_dir=results_dir)
+    # 7. Start MLflow run first, capture real run ID, log result, and persist JSON (Task 5)
     tracker = MLflowTracker()
-    with tracker.run(run_name=f"{variant}_seed{seed}_{split}"):
+    with tracker.run(run_name=f"{variant}_seed{seed}_{split}") as run_id:
+        arm_result.mlflow_run_id = str(run_id)
         tracker.log_arm_result(arm_result)
+        write(arm_result, results_dir=results_dir)
 
     return arm_result

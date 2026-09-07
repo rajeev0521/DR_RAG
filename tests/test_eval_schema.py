@@ -28,6 +28,11 @@ def test_results_schema_write_and_load():
         out_path = write(res, results_dir=tmpdir)
         assert Path(out_path).exists()
 
+        import json
+        with open(out_path, "r", encoding="utf-8") as fp:
+            saved_json = json.load(fp)
+        assert saved_json["ragas_faithfulness"] is None
+
         df = load_all(tmpdir)
         assert len(df) == 1
         assert df.iloc[0]["system"] == "full_stp"

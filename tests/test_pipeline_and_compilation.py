@@ -62,3 +62,44 @@ def test_compile_results_table(tmp_path):
     assert "Fixed-size" in md_table
     assert "Full STP" in md_table
     assert r"\begin{table*}" in latex_table
+
+
+def test_run_ablation_arm_mlflow_provenance_and_ragas_sentinel(tmp_path):
+    """Verifies that ArmResult captures a valid MLflow run ID and honest null RAGAS sentinels."""
+    import json
+    # Create mini test split
+    mini_doc = [{
+        "doc_id": "test_d0",
+        "title": "Test Doc",
+        "text": "# Section 1\nThis is the first sentence discussing topic kinematics.\nThis is the second sentence.",
+        "qa_pairs": [{
+            "query_id": "q0",
+            "question": "What does the first sentence discuss?",
+            "answer": "topic kinematics",
+            "gold_sentences": ["This is the first sentence discussing topic kinematics."],
+        }]
+    }]
+    split_path = tmp_path / "mini_split.json"
+    with open(split_path, "w", encoding="utf-8") as f:
+        json.dump(mini_doc, f)
+
+    res = run_ablation_arm(
+        variant="velocity_only",
+        seed=42,
+        split="test",
+        data_path=str(split_path),
+        results_dir=str(tmp_path),
+        use_in_memory_store=True,
+    )
+
+    # Verify real MLflow run ID attached
+    assert res.mlflow_run_id != "", "mlflow_run_id must not be empty"
+    assert res.ragas_faithfulness is None, "RAGAS should default to explicit None/null sentinel"
+
+    # Verify file on disk has the run ID
+    json_path = tmp_path / f"velocity_only__seed42__test.json"
+    assert json_path.exists()
+    with open(json_path, "r", encoding="utf-8") as f:
+        disk_data = json.load(f)
+    assert disk_data["mlflow_run_id"] == res.mlflow_run_id
+    assert disk_data["ragas_faithfulness"] is None

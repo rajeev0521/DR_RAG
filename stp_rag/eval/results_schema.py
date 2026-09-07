@@ -26,10 +26,10 @@ class ArmResult:
     tokens_per_chunk: float
     build_time_sec: float
     retrieval_latency_ms: float
-    ragas_faithfulness: float = 0.0
-    ragas_answer_relevancy: float = 0.0
-    ragas_context_precision: float = 0.0
-    ragas_context_recall: float = 0.0
+    ragas_faithfulness: Optional[float] = None
+    ragas_answer_relevancy: Optional[float] = None
+    ragas_context_precision: Optional[float] = None
+    ragas_context_recall: Optional[float] = None
     mlflow_run_id: str = ""
     embedding_model_version: str = "BAAI/bge-m3"
     corpus_version: str = "1.0"
