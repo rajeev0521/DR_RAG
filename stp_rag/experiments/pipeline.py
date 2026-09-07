@@ -222,11 +222,17 @@ def run_ablation_arm(
             for c in all_chunks:
                 if c.chunk_id in doc_chunk_set:
                     c_text_lower = c.text.lower()
-                    # 1. Match on exact gold sentence / evidence text
-                    if any(gs.lower() in c_text_lower for gs in gold_sentences if gs):
+                    # 1. Match on exact gold sentence / evidence text (or chunk contained inside long gold evidence paragraph)
+                    if any(
+                        (gs.lower() in c_text_lower or (len(c_text_lower) >= 30 and c_text_lower in gs.lower()))
+                        for gs in gold_sentences if gs
+                    ):
                         matching_cids.add(c.chunk_id)
                     # 2. Match on supporting facts if string-based
-                    elif any(isinstance(sf, str) and sf.lower() in c_text_lower for sf in supp_facts):
+                    elif any(
+                        isinstance(sf, str) and (sf.lower() in c_text_lower or (len(c_text_lower) >= 30 and c_text_lower in sf.lower()))
+                        for sf in supp_facts if sf
+                    ):
                         matching_cids.add(c.chunk_id)
                     # 3. Fallback to keywords only if present in legacy fixtures
                     elif keywords and any(kw.lower() in c_text_lower for kw in keywords if kw):
@@ -245,12 +251,20 @@ def run_ablation_arm(
 
     # 5. Answer Generation
     chunk_map = {c.chunk_id: c for c in all_chunks}
+    max_eval_q = eval_cfg.get("generation", {}).get("max_eval_queries")
+    eval_query_indices = list(range(len(queries)))
+    if max_eval_q and len(queries) > max_eval_q:
+        eval_query_indices = eval_query_indices[:max_eval_q]
+
     predicted_answers = []
-    for q_idx, q_text in enumerate(queries):
+    evaluated_gold_answers = []
+    for q_idx in eval_query_indices:
+        q_text = queries[q_idx]
         top_cids = retrieved_chunk_ids[q_idx][:3]
         retrieved_contexts = [chunk_map[cid].augmented_text for cid in top_cids if cid in chunk_map]
         ans, _ = generator.generate(q_text, retrieved_contexts)
         predicted_answers.append(ans)
+        evaluated_gold_answers.append(gold_answers[q_idx])
 
     # 6. Evaluation Metrics
     r1 = compute_recall_at_k(retrieved_chunk_ids, gold_chunk_ids_list, k=1)
@@ -258,8 +272,8 @@ def run_ablation_arm(
     r10 = compute_recall_at_k(retrieved_chunk_ids, gold_chunk_ids_list, k=10)
     mrr = compute_mrr(retrieved_chunk_ids, gold_chunk_ids_list)
 
-    # If LLM offline fallback occurs, compute EM/F1 against string if available
-    em, f1 = compute_qa_metrics(predicted_answers, gold_answers)
+    # Compute EM/F1 against generated answers
+    em, f1 = compute_qa_metrics(predicted_answers, evaluated_gold_answers)
     eff = compute_efficiency_metrics(chunks_per_doc, build_time, query_latencies)
 
     # Compute RAGAS metrics if enabled (or populate explicit null sentinels)
