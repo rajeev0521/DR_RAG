@@ -47,10 +47,15 @@ class DenseRetriever:
         Returns:
             (list_of_retrieved_ids, list_of_latencies_ms)
         """
+        if not queries:
+            return [], []
+
+        query_vecs = self.embedder.embed_texts(list(queries))
         all_ids = []
         all_latencies = []
-        for q in queries:
-            cids, lat = self.retrieve(q, top_k=top_k)
+        for q_vec in query_vecs:
+            cids, lat = self.vector_store.search(q_vec, top_k=top_k)
             all_ids.append(cids)
             all_latencies.append(lat)
         return all_ids, all_latencies
+
