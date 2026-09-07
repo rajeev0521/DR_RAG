@@ -73,7 +73,9 @@ def segment_document(
 
         # Check conditions
         prob = float(probs[i])
-        forced = (current_length + u_tokens >= L_max)
+        local_ceiling = float(target_lengths[i]) if (target_lengths is not None and i < len(target_lengths)) else float(L_max)
+        effective_max = max(float(L_min), min(float(L_max), local_ceiling))
+        forced = (current_length + u_tokens >= effective_max)
         prob_accepted = (prob > tau_B and current_length >= L_min)
 
         if forced or prob_accepted:
