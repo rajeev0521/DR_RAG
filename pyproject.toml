@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stp-rag"
+version = "0.1.0"
+description = "Semantic Transition Profile Guided Adaptive Chunking and Context Selection for Long-Document RAG"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "scipy",
+    "pandas",
+    "torch",
+    "transformers",
+    "sentence-transformers",
+    "spacy",
+    "qdrant-client",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["stp_rag*"]

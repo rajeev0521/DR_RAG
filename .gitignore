@@ -1,0 +1,46 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+.conda/
+venv/
+env/
+
+# Distribution / packaging
+*.egg-info/
+*.egg
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Pytest
+.pytest_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker volumes (generated at runtime)
+docker/qdrant_storage/
+docker/mlflow_data/
+
+# Data caches (large, regenerable)
+data/cache/
+
+# MLflow local artifacts
+mlruns/
+
+# Agents / Gemini config (local only)
+.agents/
+.gemini/
