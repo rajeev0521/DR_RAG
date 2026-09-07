@@ -201,19 +201,30 @@ def run_ablation_arm(
         doc_chunk_set = {c.chunk_id for c in all_chunks if c.metadata.get("doc_id") == doc_id}
 
         for qa in doc.get("qa_pairs", []):
-            queries.append(qa["question"])
-            gold_answers.append(qa["answer"])
+            gold_sentences = qa.get("gold_sentences") or []
+            supp_facts = qa.get("supporting_facts") or []
+            keywords = qa.get("gold_chunk_keywords") or []
 
-            # Identify answer-bearing chunk ids based on keyword hits in chunk text
-            keywords = qa.get("gold_chunk_keywords", [])
             matching_cids = set()
             for c in all_chunks:
                 if c.chunk_id in doc_chunk_set:
-                    if any(kw.lower() in c.text.lower() for kw in keywords):
+                    c_text_lower = c.text.lower()
+                    # 1. Match on exact gold sentence / evidence text
+                    if any(gs.lower() in c_text_lower for gs in gold_sentences if gs):
                         matching_cids.add(c.chunk_id)
+                    # 2. Match on supporting facts if string-based
+                    elif any(isinstance(sf, str) and sf.lower() in c_text_lower for sf in supp_facts):
+                        matching_cids.add(c.chunk_id)
+                    # 3. Fallback to keywords only if present in legacy fixtures
+                    elif keywords and any(kw.lower() in c_text_lower for kw in keywords if kw):
+                        matching_cids.add(c.chunk_id)
+
             if not matching_cids:
-                # Fallback to entire doc chunks if no keyword match
-                matching_cids = doc_chunk_set
+                # Do NOT fall back to whole doc; drop unmappable query to avoid false 1.0 Recall/MRR
+                continue
+
+            queries.append(qa["question"])
+            gold_answers.append(qa["answer"])
             gold_chunk_ids_list.append(matching_cids)
 
     # Execute batch retrieval
