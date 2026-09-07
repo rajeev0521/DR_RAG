@@ -1,55 +1,37 @@
-# STP-RAG Calibrated Hyperparameters and Dev Normalization (Theta)
-# Frozen from Stage C calibration
-
 normalization:
-  v_median: 1.2504
-  v_iqr: 0.8421
-  a_median: 0.0123
-  a_iqr: 0.5412
-  sigma_median: 0.3850
-  sigma_iqr: 0.2981
-
+  v_median: 22.309069633483887
+  v_iqr: 35.76317071914673
+  a_median: 1.6435651779174805
+  a_iqr: 42.13401556015015
+  sigma_median: 41.755170822143555
+  sigma_iqr: 56.23884057998657
 structural_scaling:
-  min_val: -0.60
-  max_val: 1.80
-
+  min_val: -0.6000000238418579
+  max_val: 1.7999999523162842
 weights:
-  # Boundary probability weights: P(B_i=1)
-  w_v: 1.15
-  w_a: 0.45
-  w_sigma: 0.60
-  w_s: 0.75
-  b: -0.85
-  tau_B: 0.50
-
-  # Adaptive chunk budget weights: T_i & L_i
-  alpha: 0.40
-  beta: 0.35
-  gamma: 0.25
-  L_min: 100
-  L_max: 500
-
-  # Structural score weights: S_i
+  w_v: 1.0494
+  w_a: 1.1507
+  w_sigma: 0.932
+  w_s: 1.0184
+  b: -1.488
+  tau_B: 0.4
+  alpha: 0.2349
+  beta: 0.5331
+  gamma: 0.3404
+  tau_sim: 0.3916
+  L_min: 80
+  L_max: 400
   eta_heading: 1.0
   eta_list: 0.5
   eta_paragraph: 0.8
   eta_clause: 0.6
-
-  # Context horizon weights: H_i
   H_min: 1
   H_max: 4
   lambda_1: 0.45
-  lambda_2: 0.40
-  lambda_3: 0.90
-
-  # Candidate ranking weights: Rel(c_j, c_i)
-  mu_1: 0.50
-  mu_2: 0.30
-  mu_3: 0.50
-  tau_R: 0.40
-
-  # Volatility window
+  lambda_2: 0.4
+  lambda_3: 0.9
+  mu_1: 0.5
+  mu_2: 0.3
+  mu_3: 0.5
+  tau_R: 0.4
   window_w: 5
-
-  # Similarity baseline threshold
-  tau_sim: 0.38
