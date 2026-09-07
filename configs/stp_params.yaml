@@ -1,0 +1,55 @@
+# STP-RAG Calibrated Hyperparameters and Dev Normalization (Theta)
+# Frozen from Stage C calibration
+
+normalization:
+  v_median: 1.2504
+  v_iqr: 0.8421
+  a_median: 0.0123
+  a_iqr: 0.5412
+  sigma_median: 0.3850
+  sigma_iqr: 0.2981
+
+structural_scaling:
+  min_val: -0.60
+  max_val: 1.80
+
+weights:
+  # Boundary probability weights: P(B_i=1)
+  w_v: 1.15
+  w_a: 0.45
+  w_sigma: 0.60
+  w_s: 0.75
+  b: -0.85
+  tau_B: 0.50
+
+  # Adaptive chunk budget weights: T_i & L_i
+  alpha: 0.40
+  beta: 0.35
+  gamma: 0.25
+  L_min: 100
+  L_max: 500
+
+  # Structural score weights: S_i
+  eta_heading: 1.0
+  eta_list: 0.5
+  eta_paragraph: 0.8
+  eta_clause: 0.6
+
+  # Context horizon weights: H_i
+  H_min: 1
+  H_max: 4
+  lambda_1: 0.45
+  lambda_2: 0.40
+  lambda_3: 0.90
+
+  # Candidate ranking weights: Rel(c_j, c_i)
+  mu_1: 0.50
+  mu_2: 0.30
+  mu_3: 0.50
+  tau_R: 0.40
+
+  # Volatility window
+  window_w: 5
+
+  # Similarity baseline threshold
+  tau_sim: 0.38
