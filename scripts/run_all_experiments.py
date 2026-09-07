@@ -1,8 +1,23 @@
-"""Executes the full 6-arm ablation study across 3 seeds and compiles Table 2."""
-
 import time
 from stp_rag.eval.compilation import compile_results_table
 from stp_rag.experiments.pipeline import run_ablation_arm
+from stp_rag.generation.answer import AnswerGenerator
+
+
+def preflight_check(model_name: str = "phi3:mini", ollama_url: str = "http://localhost:11434/api/generate") -> None:
+    """Pre-flight check that fails loudly if the generator is offline or returning errors."""
+    print("[Pre-flight] Verifying LLM Generator health...")
+    generator = AnswerGenerator(model_name=model_name, ollama_url=ollama_url)
+    if not generator.health_check():
+        raise RuntimeError(
+            f"Pre-flight generator check failed! Cannot reach Ollama at {ollama_url} "
+            f"with model '{model_name}'. Please start Ollama (`ollama serve`) before running experiments."
+        )
+    sample_ans, _ = generator.generate("What is 1+1?", ["Mathematics: 1+1 equals 2."])
+    if sample_ans.startswith("[Ollama Offline:") or sample_ans.startswith("[Ollama Error"):
+        raise RuntimeError(f"Pre-flight generator produced error response: {sample_ans}")
+    print(f"[Pre-flight] Generator online and responding: '{sample_ans.strip()[:60]}...'")
+
 
 ARMS = [
     "fixed_size",
@@ -19,6 +34,7 @@ def main():
     print("=" * 70)
     print("Starting STP-RAG 6-Arm Empirical Ablation Execution")
     print("=" * 70)
+    preflight_check()
     start_total = time.perf_counter()
 
     for arm in ARMS:

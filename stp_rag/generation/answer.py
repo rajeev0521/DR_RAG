@@ -64,3 +64,19 @@ class AnswerGenerator:
         except Exception as exc:
             # Fallback for testing when Ollama daemon is offline
             return f"[Ollama Offline: {exc}]", prompt
+
+    def health_check(self) -> bool:
+        """Verifies that the generation endpoint is responsive and returns non-empty output."""
+        try:
+            payload = {
+                "model": self.model_name,
+                "prompt": "Respond with the single word 'OK'.",
+                "stream": False,
+            }
+            resp = requests.post(self.ollama_url, json=payload, timeout=15)
+            if resp.status_code == 200:
+                ans = resp.json().get("response", "").strip()
+                return len(ans) > 0
+            return False
+        except Exception:
+            return False
