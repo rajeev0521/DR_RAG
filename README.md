@@ -106,6 +106,11 @@ The evaluation protocol compares 6 chunking strategies across 3 random seeds:
 - **Evaluation:** RAGAS, custom retrieval & answer metrics
 - **NLP:** spaCy, sentence-transformers
 
+## Scope & Future Work
+
+### Two-Stage Multi-Hop Evidence Fusion Scope Decision
+The core empirical investigation of STP-RAG is evaluating whether modeling local semantic transition dynamics ($v, a, \sigma, S$) yields superior chunk representations. In accordance with Section III of the manuscript, dense passage retrieval serves as the primary downstream evaluation environment across all 6 ablation arms. Multi-hop OpenIE graph fusion is formally descoped from this iteration and reserved as future work. The rule-based `QueryRouter` is retained as an experimental classification utility, while all empirical claims trace to single-stage dense retrieval.
+
 ## License
 
 MIT License — see [LICENSE](LICENSE) for details.
