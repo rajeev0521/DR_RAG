@@ -1,0 +1,58 @@
+[
+  {
+    "doc_id": "doc_test_01",
+    "title": "Adaptive Chunk Granularity and Index Efficiency",
+    "text": "# 1. Background on Segmentation Trade-offs\nFixed-window chunking imposes a single token budget across heterogeneous document regions.\nWhen chunks are too large, irrelevant claims pollute the representation and lower retrieval precision.\nWhen chunks are too small, core definitions are severed from their operational conditions.\nThis trade-off governs the effectiveness of long-context retrieval-augmented generation.\n\n# 2. Semantic Volatility and Granularity Policies\nSemantic volatility quantifies the local standard deviation of semantic velocity across a trailing window.\nHigh volatility indicates frequent, erratic topic changes such as enumerations, exceptions, or technical definitions.\nIn volatile regions, the target chunk budget is dynamically scaled down toward the minimum chunk length L_min.\nIn stable regions, the target budget expands toward L_max to minimize index overhead and retain holistic context.\n\n# 3. Empirical Implications on Latency and Quality\nTherefore, volatility-guided granularity creates fewer total chunks than uniform micro-chunking while preserving fine-grained boundaries.\nAs a result, retrieval latency remains competitive while Mean Reciprocal Rank improves.",
+    "qa_pairs": [
+      {
+        "query_id": "q_test_01",
+        "question": "How is the target chunk budget adjusted in highly volatile document regions?",
+        "answer": "dynamically scaled down toward the minimum chunk length L_min",
+        "gold_chunk_keywords": [
+          "volatility",
+          "L_min"
+        ],
+        "query_type": "single_hop"
+      },
+      {
+        "query_id": "q_test_02",
+        "question": "What are the two failure modes when chunks are either too large or too small?",
+        "answer": "irrelevant claims pollute the representation and core definitions are severed from operational conditions",
+        "gold_chunk_keywords": [
+          "too large",
+          "too small",
+          "pollute"
+        ],
+        "query_type": "multi_hop"
+      }
+    ]
+  },
+  {
+    "doc_id": "doc_test_02",
+    "title": "Context Horizon Scaling and Predecessor Ranking",
+    "text": "# Section A: Context Selection Mechanics\nAttaching a fixed historical window to every chunk inflates the index and degrades vector search specificity.\nSTP-RAG computes an adaptive context horizon H_i determined by semantic volatility, positive acceleration, and reference cues.\nThe horizon specifies the candidate predecessor pool size, bounded between H_min and H_max.\n\n# Section B: Ranking and Filtering Candidates\nCandidate predecessors within the horizon are scored using composite relevance.\nThe relevance function combines embedding cosine similarity, entity dependency overlap, and reference resolution matching.\nOnly candidates surpassing the calibrated threshold tau_R are attached to the indexed chunk.\nConsequently, only contextually vital predecessors are preserved, ensuring high faithfulness during generation.",
+    "qa_pairs": [
+      {
+        "query_id": "q_test_03",
+        "question": "What three signals determine the adaptive context horizon H_i?",
+        "answer": "semantic volatility, positive acceleration, and reference cues",
+        "gold_chunk_keywords": [
+          "horizon",
+          "volatility",
+          "acceleration"
+        ],
+        "query_type": "single_hop"
+      },
+      {
+        "query_id": "q_test_04",
+        "question": "Which candidate predecessors are attached to the indexed chunk?",
+        "answer": "Only candidates surpassing the calibrated threshold tau_R",
+        "gold_chunk_keywords": [
+          "tau_R",
+          "attached"
+        ],
+        "query_type": "single_hop"
+      }
+    ]
+  }
+]

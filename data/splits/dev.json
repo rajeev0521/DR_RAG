@@ -1,0 +1,46 @@
+[
+  {
+    "doc_id": "doc_dev_01",
+    "title": "Kinematic Representation in Dense Retrieval Systems",
+    "text": "# 1. Introduction to Retrieval Kinematics\nDense passage retrieval relies on dual-encoder architectures that project queries and candidate text passages into a continuous embedding space.\nStandard retrieval designs apply fixed-size chunking across document boundaries without accounting for internal semantic shifts.\nHowever, documents are not uniformly dense in informational content.\nCertain passages transition rapidly across topical boundaries, while others remain stable across several paragraphs.\n\n# 2. Velocity and Acceleration Cues\nTo capture these dynamics, we introduce kinematic analogies.\nSemantic velocity represents the rate of semantic displacement per normalized unit length.\nSemantic acceleration measures the rate of change of semantic velocity.\nWhen semantic acceleration is positive, it signals an approaching or active topical shift.\nConversely, negative acceleration indicates that the narrative is stabilizing into a cohesive topic.\n\n# 3. Reference and Context Resolution\nIn this condition, preceding definitions must be preserved to resolve anaphoric dependencies.\nFor example, abbreviations such as STP (Semantic Transition Profile) require their antecedent definitions.\nTherefore, selective context propagation links necessary predecessor passages without creating indexing bloat.",
+    "qa_pairs": [
+      {
+        "query_id": "q_dev_01",
+        "question": "What does positive semantic acceleration indicate in a document?",
+        "answer": "an approaching or active topical shift",
+        "gold_chunk_keywords": [
+          "acceleration",
+          "topical shift"
+        ],
+        "query_type": "single_hop"
+      },
+      {
+        "query_id": "q_dev_02",
+        "question": "Why is selective context propagation needed when anaphoric dependencies like STP occur?",
+        "answer": "to link necessary predecessor passages without creating indexing bloat",
+        "gold_chunk_keywords": [
+          "selective context",
+          "indexing bloat"
+        ],
+        "query_type": "multi_hop"
+      }
+    ]
+  },
+  {
+    "doc_id": "doc_dev_02",
+    "title": "Long-Document Boundary Calibration in Legal Corpora",
+    "text": "# Article I: Scope of Obligations\nThe recipient shall preserve all proprietary information disclosed by the disclosing party under strict confidentiality.\nProprietary information includes source code, financial algorithms, customer lists, and developmental roadmaps.\nHowever, proprietary information does not include information that is publicly known or independently developed without reference to the disclosure.\n\n# Article II: Remedies and Exceptions\nProvided that an unauthorized disclosure occurs, the aggrieved party is entitled to immediate injunctive relief.\nNotwithstanding any contrary provision herein, liability for gross negligence shall not be limited.\nTherefore, neither party may disclaim damages arising from intentional misconduct or willful breach of Article I.",
+    "qa_pairs": [
+      {
+        "query_id": "q_dev_03",
+        "question": "Under what condition is the aggrieved party entitled to immediate injunctive relief?",
+        "answer": "Provided that an unauthorized disclosure occurs",
+        "gold_chunk_keywords": [
+          "injunctive relief",
+          "unauthorized disclosure"
+        ],
+        "query_type": "single_hop"
+      }
+    ]
+  }
+]
