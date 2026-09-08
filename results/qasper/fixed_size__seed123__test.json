@@ -1,0 +1,22 @@
+{
+  "system": "fixed_size",
+  "seed": 123,
+  "split": "test",
+  "recall_at_1": 0.1262135922330097,
+  "recall_at_5": 0.3786407766990291,
+  "recall_at_10": 0.4368932038834951,
+  "mrr": 0.22605948528278622,
+  "em": 0.04,
+  "f1": 0.13206367317570597,
+  "chunks_per_doc": 12.428571428571429,
+  "tokens_per_chunk": 369.8949096880131,
+  "build_time_sec": 0.4369395000394434,
+  "retrieval_latency_ms": 2.8237242746682276,
+  "ragas_faithfulness": null,
+  "ragas_answer_relevancy": null,
+  "ragas_context_precision": null,
+  "ragas_context_recall": null,
+  "mlflow_run_id": "979dd9e2f09745a5abebc4e3dec0eb2f",
+  "embedding_model_version": "BAAI/bge-small-en-v1.5",
+  "corpus_version": "1.0"
+}
