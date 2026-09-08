@@ -1,3 +1,9 @@
+"""Executes the full 6-arm ablation study across 3 seeds on HotpotQA and QASPER."""
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
 import time
 from stp_rag.eval.compilation import compile_results_table
 from stp_rag.experiments.pipeline import run_ablation_arm
@@ -30,43 +36,75 @@ ARMS = [
 SEEDS = [42, 123, 999]
 
 
-def main():
-    print("=" * 70)
-    print("Starting STP-RAG 6-Arm Empirical Ablation Execution")
-    print("=" * 70)
-    preflight_check()
-    start_total = time.perf_counter()
+def run_benchmark_dataset(
+    dataset_name: str,
+    data_path: str,
+    results_dir: str,
+    tex_path: str,
+    split: str = "test",
+) -> None:
+    print("\n" + "=" * 75)
+    print(f"Executing 6-Arm Ablation Suite on Dataset: [{dataset_name.upper()}] ({data_path})")
+    print("=" * 75)
+    start_time = time.perf_counter()
 
     for arm in ARMS:
-        print(f"\n---> Running Ablation Arm: [{arm}]")
+        print(f"\n---> Running Ablation Arm: [{arm}] on {dataset_name}")
         for s in SEEDS:
             t0 = time.perf_counter()
             res = run_ablation_arm(
                 variant=arm,
                 seed=s,
-                split="test",
+                split=split,
+                data_path=data_path,
+                results_dir=results_dir,
                 use_in_memory_store=True,
             )
             elapsed = time.perf_counter() - t0
             print(
                 f"     Seed {s:3d} | Recall@5: {res.recall_at_5:.3f} | MRR: {res.mrr:.3f} | "
-                f"Chunks: {res.chunks_per_doc:.1f} | Latency: {res.retrieval_latency_ms:.1f}ms ({elapsed:.2f}s)"
+                f"EM: {res.em:.3f} | F1: {res.f1:.3f} | Chunks: {res.chunks_per_doc:.1f} | "
+                f"MLflow ID: {res.mlflow_run_id[:8]} ({elapsed:.1f}s)"
             )
 
-    total_time = time.perf_counter() - start_total
-    print("\n" + "=" * 70)
-    print(f"All runs completed in {total_time:.2f} seconds.")
-    print("Compiling Results into Table 2...")
-    print("=" * 70)
+    total_time = time.perf_counter() - start_time
+    print("\n" + "-" * 75)
+    print(f"[{dataset_name.upper()}] runs completed in {total_time:.1f}s. Compiling results table...")
 
-    summary_df, md_table, latex_table = compile_results_table("results/", split="test")
+    summary_df, md_table, latex_table = compile_results_table(results_dir, split=split)
     print("\n" + md_table + "\n")
 
-    # Export to Overleaf folder
-    tex_path = "STP_RAG_Overleaf_Package/table2_generated.tex"
-    with open(tex_path, "w", encoding="utf-8") as f:
-        f.write(latex_table)
-    print(f"Exported LaTeX Table 2 to: {tex_path}")
+    p_tex = Path(tex_path)
+    p_tex.parent.mkdir(parents=True, exist_ok=True)
+    p_tex.write_text(latex_table, encoding="utf-8")
+    print(f"Exported LaTeX table to: {p_tex}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Run STP-RAG ablation benchmarks.")
+    parser.add_argument("--dataset", choices=["all", "hotpotqa", "qasper"], default="all",
+                        help="Benchmark dataset to evaluate (default: all).")
+    args = parser.parse_args()
+
+    preflight_check()
+
+    if args.dataset in ("all", "hotpotqa"):
+        run_benchmark_dataset(
+            dataset_name="HotpotQA",
+            data_path="data/splits/test.json",
+            results_dir="results/",
+            tex_path="STP_RAG_Overleaf_Package/table2_generated.tex",
+            split="test",
+        )
+
+    if args.dataset in ("all", "qasper"):
+        run_benchmark_dataset(
+            dataset_name="QASPER",
+            data_path="data/splits/qasper/test.json",
+            results_dir="results/qasper/",
+            tex_path="STP_RAG_Overleaf_Package/table2_qasper.tex",
+            split="test",
+        )
 
 
 if __name__ == "__main__":

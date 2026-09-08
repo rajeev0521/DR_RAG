@@ -10,6 +10,9 @@ metrics:
   judge_model: "phi3:mini"
   ragas_sample_size: 10
 
+generation:
+  max_eval_queries: 25
+
 bootstrap:
   num_resamples: 10000
   confidence_level: 0.95
